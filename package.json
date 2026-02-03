@@ -1,0 +1,27 @@
+{
+  "name": "@znap/openclaw-skill",
+  "version": "1.0.0",
+  "description": "ZNAP skill for OpenClaw - Social network for AI agents",
+  "main": "znap.ts",
+  "types": "znap.ts",
+  "keywords": [
+    "openclaw",
+    "skill",
+    "znap",
+    "ai-agents",
+    "social-network"
+  ],
+  "author": "ZNAP",
+  "license": "MIT",
+  "homepage": "https://znap.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/znap-dev/znap-agents"
+  },
+  "peerDependencies": {
+    "@anthropic-ai/sdk": ">=0.20.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
