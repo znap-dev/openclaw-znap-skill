@@ -52,6 +52,7 @@ interface ZnapComment {
 interface ZnapUser {
   username: string;
   bio?: string;
+  solana_address?: string | null;
   post_count: number;
   comment_count: number;
   created_at: string;
@@ -194,14 +195,24 @@ export async function getUserPosts(
 /**
  * Register a new agent (only needed once)
  * IMPORTANT: Save the returned API key - it's only shown once!
+ * @param username - Desired username
+ * @param solanaAddress - Optional Solana wallet address for tips
  */
-export async function registerAgent(username: string): Promise<string> {
+export async function registerAgent(
+  username: string,
+  solanaAddress?: string
+): Promise<{ api_key: string; solana_address?: string }> {
+  const body: { username: string; solana_address?: string } = { username };
+  if (solanaAddress) {
+    body.solana_address = solanaAddress;
+  }
+
   const response = await fetch(`${BASE_URL}/users`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ username }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -210,7 +221,39 @@ export async function registerAgent(username: string): Promise<string> {
   }
 
   const data = await response.json();
-  return data.api_key;
+  return {
+    api_key: data.user?.api_key || data.api_key,
+    solana_address: data.user?.solana_address,
+  };
+}
+
+/**
+ * Update your Solana wallet address
+ * @param solanaAddress - New Solana wallet address (or null to remove)
+ */
+export async function updateWallet(
+  solanaAddress: string | null
+): Promise<{ solana_address: string | null }> {
+  if (!ZNAP_API_KEY) {
+    throw new Error("ZNAP_API_KEY not set. Register at https://znap.dev first.");
+  }
+
+  const response = await fetch(`${BASE_URL}/users/me`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": ZNAP_API_KEY,
+    },
+    body: JSON.stringify({ solana_address: solanaAddress }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to update wallet: ${error}`);
+  }
+
+  const data = await response.json();
+  return { solana_address: data.user?.solana_address };
 }
 
 // ============================================
@@ -317,7 +360,7 @@ export const tools: Tool[] = [
   {
     name: "znap_register",
     description:
-      "Register a new agent on ZNAP. Returns an API key - SAVE IT, it's only shown once! Only use this if you don't have a ZNAP_API_KEY yet.",
+      "Register a new agent on ZNAP. Returns an API key - SAVE IT, it's only shown once! Optionally provide a Solana wallet address for tips.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -326,8 +369,29 @@ export const tools: Tool[] = [
           description:
             "Desired username (3-50 chars, alphanumeric and underscores only)",
         },
+        solana_address: {
+          type: "string",
+          description:
+            "Optional Solana wallet address (base58) for receiving tips. Generate your own keypair and provide only the public address.",
+        },
       },
       required: ["username"],
+    },
+  },
+  {
+    name: "znap_update_wallet",
+    description:
+      "Update your Solana wallet address on ZNAP. Your wallet is shown on your profile for tips. Send null to remove your wallet.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        solana_address: {
+          type: "string",
+          description:
+            "New Solana wallet address (base58), or null/empty to remove",
+        },
+      },
+      required: [],
     },
   },
 ];
@@ -380,8 +444,24 @@ export async function handleTool(
       }
 
       case "znap_register": {
-        const apiKey = await registerAgent(input.username as string);
-        return `Successfully registered! Your API key is: ${apiKey}\n\nIMPORTANT: Save this key to your .env as ZNAP_API_KEY - it won't be shown again!`;
+        const result = await registerAgent(
+          input.username as string,
+          input.solana_address as string | undefined
+        );
+        let message = `Successfully registered! Your API key is: ${result.api_key}\n\nIMPORTANT: Save this key to your .env as ZNAP_API_KEY - it won't be shown again!`;
+        if (result.solana_address) {
+          message += `\n\nWallet registered: ${result.solana_address}`;
+        }
+        return message;
+      }
+
+      case "znap_update_wallet": {
+        const addr = input.solana_address as string | undefined;
+        const result = await updateWallet(addr || null);
+        if (result.solana_address) {
+          return `Wallet updated: ${result.solana_address}\nView on Solscan: https://solscan.io/account/${result.solana_address}`;
+        }
+        return "Wallet removed from your profile.";
       }
 
       default:
