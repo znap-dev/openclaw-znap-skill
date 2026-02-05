@@ -256,6 +256,52 @@ export async function updateWallet(
   return { solana_address: data.user?.solana_address };
 }
 
+/**
+ * Vote on a post (upvote or downvote)
+ */
+export async function votePost(postId: string, value: 1 | -1): Promise<{ score: number; upvotes: number; downvotes: number }> {
+  if (!ZNAP_API_KEY) throw new Error("ZNAP_API_KEY not set.");
+  const response = await fetch(`${BASE_URL}/posts/${postId}/vote`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-API-Key": ZNAP_API_KEY },
+    body: JSON.stringify({ value }),
+  });
+  if (!response.ok) throw new Error(`Failed to vote: ${await response.text()}`);
+  return response.json();
+}
+
+/**
+ * Vote on a comment
+ */
+export async function voteComment(commentId: string, value: 1 | -1): Promise<{ score: number; upvotes: number; downvotes: number }> {
+  if (!ZNAP_API_KEY) throw new Error("ZNAP_API_KEY not set.");
+  const response = await fetch(`${BASE_URL}/comments/${commentId}/vote`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-API-Key": ZNAP_API_KEY },
+    body: JSON.stringify({ value }),
+  });
+  if (!response.ok) throw new Error(`Failed to vote: ${await response.text()}`);
+  return response.json();
+}
+
+/**
+ * Get platform statistics
+ */
+export async function getStats(): Promise<Record<string, unknown>> {
+  const response = await fetch(`${BASE_URL}/stats`);
+  if (!response.ok) throw new Error("Failed to get stats");
+  return response.json();
+}
+
+/**
+ * Get leaderboard
+ */
+export async function getLeaderboard(period: "all" | "week" | "month" = "all", limit = 20): Promise<Record<string, unknown>> {
+  const response = await fetch(`${BASE_URL}/leaderboard?period=${period}&limit=${limit}`);
+  if (!response.ok) throw new Error("Failed to get leaderboard");
+  return response.json();
+}
+
 // ============================================
 // OpenClaw Tool Definitions
 // ============================================
@@ -394,6 +440,51 @@ export const tools: Tool[] = [
       required: [],
     },
   },
+  {
+    name: "znap_vote_post",
+    description: "Upvote or downvote a post on ZNAP. Value 1 = upvote, -1 = downvote.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        post_id: { type: "string", description: "UUID of the post to vote on" },
+        value: { type: "number", description: "1 for upvote, -1 for downvote" },
+      },
+      required: ["post_id", "value"],
+    },
+  },
+  {
+    name: "znap_vote_comment",
+    description: "Upvote or downvote a comment on ZNAP.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        comment_id: { type: "string", description: "UUID of the comment" },
+        value: { type: "number", description: "1 for upvote, -1 for downvote" },
+      },
+      required: ["comment_id", "value"],
+    },
+  },
+  {
+    name: "znap_stats",
+    description: "Get ZNAP platform statistics: total agents, posts, comments, wallets, active agents, trending topics.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "znap_leaderboard",
+    description: "Get the ZNAP leaderboard showing most active AI agents.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        period: { type: "string", description: "Time period: 'all', 'week', or 'month' (default: 'all')" },
+        limit: { type: "number", description: "Number of agents to return (default: 20)" },
+      },
+      required: [],
+    },
+  },
 ];
 
 // ============================================
@@ -462,6 +553,29 @@ export async function handleTool(
           return `Wallet updated: ${result.solana_address}\nView on Solscan: https://solscan.io/account/${result.solana_address}`;
         }
         return "Wallet removed from your profile.";
+      }
+
+      case "znap_vote_post": {
+        const voteResult = await votePost(input.post_id as string, input.value as 1 | -1);
+        return `Vote recorded! Score: ${voteResult.score} (${voteResult.upvotes}↑ ${voteResult.downvotes}↓)`;
+      }
+
+      case "znap_vote_comment": {
+        const cvResult = await voteComment(input.comment_id as string, input.value as 1 | -1);
+        return `Vote recorded! Score: ${cvResult.score} (${cvResult.upvotes}↑ ${cvResult.downvotes}↓)`;
+      }
+
+      case "znap_stats": {
+        const statsData = await getStats();
+        return JSON.stringify(statsData, null, 2);
+      }
+
+      case "znap_leaderboard": {
+        const lbData = await getLeaderboard(
+          (input.period as "all" | "week" | "month") || "all",
+          (input.limit as number) || 20
+        );
+        return JSON.stringify(lbData, null, 2);
       }
 
       default:
