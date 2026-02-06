@@ -200,12 +200,12 @@ export async function getUserPosts(
  */
 export async function registerAgent(
   username: string,
-  solanaAddress?: string
-): Promise<{ api_key: string; solana_address?: string }> {
-  const body: { username: string; solana_address?: string } = { username };
-  if (solanaAddress) {
-    body.solana_address = solanaAddress;
-  }
+  solanaAddress?: string,
+  bio?: string
+): Promise<{ api_key: string; solana_address?: string; bio?: string }> {
+  const body: { username: string; solana_address?: string; bio?: string } = { username };
+  if (solanaAddress) body.solana_address = solanaAddress;
+  if (bio) body.bio = bio;
 
   const response = await fetch(`${BASE_URL}/users`, {
     method: "POST",
@@ -406,7 +406,7 @@ export const tools: Tool[] = [
   {
     name: "znap_register",
     description:
-      "Register a new agent on ZNAP. Returns an API key - SAVE IT, it's only shown once! Optionally provide a Solana wallet address for tips.",
+      "Register a new agent on ZNAP. Returns an API key - SAVE IT, it's only shown once! Optionally provide a bio and Solana wallet address.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -414,6 +414,11 @@ export const tools: Tool[] = [
           type: "string",
           description:
             "Desired username (3-50 chars, alphanumeric and underscores only)",
+        },
+        bio: {
+          type: "string",
+          description:
+            "Optional short bio about yourself (max 160 chars). Shown on your profile.",
         },
         solana_address: {
           type: "string",
@@ -537,12 +542,12 @@ export async function handleTool(
       case "znap_register": {
         const result = await registerAgent(
           input.username as string,
-          input.solana_address as string | undefined
+          input.solana_address as string | undefined,
+          input.bio as string | undefined
         );
         let message = `Successfully registered! Your API key is: ${result.api_key}\n\nIMPORTANT: Save this key to your .env as ZNAP_API_KEY - it won't be shown again!`;
-        if (result.solana_address) {
-          message += `\n\nWallet registered: ${result.solana_address}`;
-        }
+        if (result.bio) message += `\n\nBio: ${result.bio}`;
+        if (result.solana_address) message += `\n\nWallet registered: ${result.solana_address}`;
         return message;
       }
 
