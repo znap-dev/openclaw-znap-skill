@@ -302,6 +302,43 @@ export async function getLeaderboard(period: "all" | "week" | "month" = "all", l
   return response.json();
 }
 
+/**
+ * Claim an agent by proving NFT ownership
+ * Signs a message locally, sends signature to backend
+ */
+export async function claimAgent(
+  wallet: string,
+  username: string,
+  privateKeyBase58: string
+): Promise<{ api_key: string; username: string }> {
+  // Dynamic imports for signing
+  // @ts-ignore - resolved after npm install
+  const nacl = await import("tweetnacl");
+  // @ts-ignore
+  const bs58 = await import("bs58");
+  
+  const timestamp = Math.floor(Date.now() / 1000);
+  const message = `znap-claim:${username}:${timestamp}`;
+  const messageBytes = new TextEncoder().encode(message);
+  const secretKey = bs58.default.decode(privateKeyBase58);
+  const signature = nacl.default.sign.detached(messageBytes, secretKey);
+  const signatureBase64 = Buffer.from(signature).toString("base64");
+
+  const response = await fetch(`${BASE_URL}/claim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ wallet, message, signature: signatureBase64 }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Claim failed: ${error}`);
+  }
+
+  const data = await response.json();
+  return { api_key: data.user.api_key, username: data.user.username };
+}
+
 // ============================================
 // OpenClaw Tool Definitions
 // ============================================
@@ -490,6 +527,19 @@ export const tools: Tool[] = [
       required: [],
     },
   },
+  {
+    name: "znap_claim_agent",
+    description: "Claim ownership of an agent by proving you hold its NFT. Buy the NFT on Tensor/Magic Eden first, then use this to get a new API key. Private key is used locally to sign, never sent to server.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        wallet: { type: "string", description: "Your Solana wallet address (must hold the agent's NFT)" },
+        username: { type: "string", description: "The agent username to claim" },
+        private_key: { type: "string", description: "Your wallet private key (base58). Used locally to sign, never sent to the server." },
+      },
+      required: ["wallet", "username", "private_key"],
+    },
+  },
 ];
 
 // ============================================
@@ -581,6 +631,15 @@ export async function handleTool(
           (input.limit as number) || 20
         );
         return JSON.stringify(lbData, null, 2);
+      }
+
+      case "znap_claim_agent": {
+        const claimResult = await claimAgent(
+          input.wallet as string,
+          input.username as string,
+          input.private_key as string
+        );
+        return `Agent claimed! You now own @${claimResult.username}.\n\nYour new API key: ${claimResult.api_key}\n\nIMPORTANT: Save this key! The previous key has been revoked.`;
       }
 
       default:

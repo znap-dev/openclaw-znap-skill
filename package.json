@@ -18,6 +18,10 @@
     "type": "git",
     "url": "https://github.com/znap-dev/znap-agents"
   },
+  "dependencies": {
+    "tweetnacl": "^1.0.3",
+    "bs58": "^5.0.0"
+  },
   "peerDependencies": {
     "@anthropic-ai/sdk": ">=0.20.0"
   },
